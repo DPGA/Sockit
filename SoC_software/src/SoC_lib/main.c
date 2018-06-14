@@ -144,6 +144,8 @@ int main() {
 
 //Ecriture des headers de trames dans les espaces mémoires juste avant les espaces mémoires des données
 	 uint32_t offset = 0x100000;
+	 const void *first_span = sdram_64MB_add-6;
+	 const void *second_span = sdram_64MB_add+offset-6;
 	 int i;
 	 for (i=0;i<2;i++){
 			 *((uint32_t *) (sdram_64MB_add-6+(i*offset)))=0x3012;
@@ -153,6 +155,11 @@ int main() {
 
 	 //Clear de la FIFO du DCS
 	 int j=0;
+	 int packet_size=0;
+	 int size_servudp=sizeof(serv_udp);
+
+	 struct sockaddr * sockaddr_servudp= (struct sockaddr *)&serv_udp ;
+
 	 while( (alt_read_word((virtual_base + ( ( uint32_t )( ALT_LWFPGASLVS_OFST + FIFO_FPGA_TO_HPS_OUT_CSR_BASE ) & ( uint32_t )( HW_REGS_MASK ) )))) > 0 ) {
    alt_read_word((virtual_base + ( ( uint32_t )( ALT_LWFPGASLVS_OFST + FIFO_FPGA_TO_HPS_OUT_BASE ) & ( uint32_t )( HW_REGS_MASK ) )));
 	 j++;
@@ -190,6 +197,21 @@ int main() {
 					//printf("value= %" PRIx64 " \n", value);
 					}
 				}*/
+				packet_size = sgdma_desc1->actual_bytes_transferred +6;
+
+				if (packet_size>6) {
+						/*for (i=0;i<2;i++) {
+
+							//gettimeofday(&begin, NULL);
+							if(sendto( socket_udp, sdram_64MB_add+(i*offset)-6, packet_size+6, 0, (struct sockaddr *)&serv_udp, size_servudp) < 0 )
+								{printf( "Send error : %s \n", strerror(errno));}
+							}*/
+							sendto( socket_udp,first_span, packet_size, 0, sockaddr_servudp, size_servudp);
+							sendto( socket_udp, second_span, packet_size, 0, sockaddr_servudp, size_servudp);
+							//gettimeofday(&end, NULL);
+							//double elapsed = (end.tv_sec - begin.tv_sec) +   ((end.tv_usec - begin.tv_usec)/1000000.0);
+							//if (elapsed > 0.00001) printf("%f\n",elapsed);
+				}
 
 			//Initialisation des descripteurs pour le sgdma : 2 descripteurs (un pour chaque demi DRS). Le descripteur vide sert à marquer la fin de la chaîne.
 			 initDescriptor_STtoMM(sgdma_desc1, (void*) (SDRAM_64_BASE),
@@ -215,22 +237,6 @@ int main() {
 						waitFinish();
 						//Arret du run
 						setControlReg(_SGDMA_CTR_IE_CHAIN_COMPLETED);
-
-						int packet_size = sgdma_desc1->actual_bytes_transferred;
-						//if (packet_size > 0) printf("size=%i nb=%x\n",packet_size, *((uint32_t *) (sdram_64MB_add+13) ));
-						//gettimeofday(&begin, NULL);
-						if (packet_size!=0) {
-								for (i=0;i<2;i++) {
-
-									if(sendto( socket_udp, sdram_64MB_add+(i*offset)-6, packet_size+6, 0, (struct sockaddr *)&serv_udp, sizeof(serv_udp) ) < 0 )
-										{printf( "Send error : %s \n", strerror(errno));}
-									}
-
-						}
-						//gettimeofday(&end, NULL);
-						//double elapsed = (end.tv_sec - begin.tv_sec) +   ((end.tv_usec - begin.tv_usec)/1000000.0);
-						//if (elapsed > 0.001) printf("%f\n",elapsed);
-
 
 		//Données DCS détectées (TCP socket pas vide)
 		} else {
